@@ -1,0 +1,26 @@
+@FormaaS_HostAddress = http://localhost:5014
+
+###
+GET {{FormaaS_HostAddress}}/forms/
+
+
+###
+PUT {{FormaaS_HostAddress}}/forms/1
+Content-Type: application/json
+
+{
+  "Name": "Form 01",
+  "Fields": [
+    {
+      "Id": "39bea9b4-0fb7-4e7d-8582-7dcc59cb3fdd",
+      "Name": "Name",
+      "Type": "TextInput",
+      "Required": true,
+      "Details": {
+        "MinLength": 1,
+        "MaxLength": 100
+      }
+    }
+  ]
+}
+
