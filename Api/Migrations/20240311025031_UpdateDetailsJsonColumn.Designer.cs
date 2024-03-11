@@ -3,6 +3,7 @@ using System;
 using FormaaS;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FormaaS.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20240311025031_UpdateDetailsJsonColumn")]
+    partial class UpdateDetailsJsonColumn
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -87,12 +90,6 @@ namespace FormaaS.Migrations
                         {
                             b1.Property<Guid>("FormFieldId")
                                 .HasColumnType("uuid");
-
-                            b1.Property<int>("MaxLength")
-                                .HasColumnType("integer");
-
-                            b1.Property<int>("MinLength")
-                                .HasColumnType("integer");
 
                             b1.HasKey("FormFieldId");
 

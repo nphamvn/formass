@@ -13,14 +13,24 @@ Content-Type: application/json
   "Fields": [
     {
       "Id": "39bea9b4-0fb7-4e7d-8582-7dcc59cb3fdd",
-      "Name": "Name",
+      "Name": "Name 2",
       "Type": "TextInput",
       "Required": true,
       "Details": {
         "MinLength": 1,
-        "MaxLength": 100
+        "MaxLength": 10
       }
     }
   ]
 }
 
+
+###
+POST {{FormaaS_HostAddress}}/formfields/
+
+###
+GET {{FormaaS_HostAddress}}/formfields/becca282-6d56-49bf-9e95-ba131d97080b
+
+
+###
+GET {{FormaaS_HostAddress}}/formfields

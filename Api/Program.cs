@@ -2,6 +2,7 @@ using FormaaS;
 using FormaaS.Entities;
 using FormaaS.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Xml.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -67,6 +68,48 @@ app.MapPost("forms", async (AppDbContext dbContext, FormCreateUpdateRequest form
     return Results.Created();
 });
 
+//app.MapPost("formfields", async (AppDbContext dbContext) =>
+//{
+//    await dbContext.FormFields.AddAsync(new FormField
+//    {
+//        Id = Guid.NewGuid(),
+//        FormId = 1,
+//        Name = "Mock Field",
+//        Type = "TextInput",
+//        Details = new()
+//        {
+//            VirtualDictionary = new Dictionary<string, object>()
+//            {
+//                { "MinLength", 1 },
+//                { "MaxLength", 100 },
+//            }
+//        },
+//        DetailsJsonColumn = new()
+//        {
+//            MinLength = 1,
+//            MaxLength = 100,
+//        },
+//        CreatedAt = DateTime.UtcNow
+//    });
+
+//    await dbContext.SaveChangesAsync();
+//});
+
+//app.MapGet("formfields", async (AppDbContext dbContext) =>
+//{
+//    var allFieldIds = new List<Guid> { Guid.Parse("39bea9b4-0fb7-4e7d-8582-7dcc59cb3fdd") };
+//    var fields = await dbContext.FormFields.Where(ff => allFieldIds.Contains(ff.Id)).ToListAsync();
+
+//    return Results.Ok(fields);
+//});
+
+//app.MapGet("formfields/{id:guid}", async (AppDbContext dbContext, Guid id) =>
+//{
+//    var field = await dbContext.FormFields.SingleOrDefaultAsync(ff => ff.Id == id);
+
+//    return Results.Ok(field);
+//});
+
 app.MapPut("forms/{id:int}", async (AppDbContext dbContext, int id, FormCreateUpdateRequest formCreateUpdateRequest) =>
 {
     using (var trans = await dbContext.Database.BeginTransactionAsync())
@@ -81,13 +124,14 @@ app.MapPut("forms/{id:int}", async (AppDbContext dbContext, int id, FormCreateUp
             await dbContext.SaveChangesAsync();
 
             var allFieldIds = formCreateUpdateRequest.Fields.Select(f => f.Id).ToList();
-            var updateFields = await dbContext.FormFields.Where(x => allFieldIds.Contains(x.Id)).ToListAsync();
+            var updateFields = await dbContext.FormFields
+                            .Where(x => allFieldIds.Contains(x.Id))
+                            .ToListAsync();
             foreach (var field in updateFields)
             {
                 var postField = formCreateUpdateRequest.Fields.Single(f => f.Id == field.Id);
 
                 field.Name = postField.Name;
-                field.CreatedAt = DateTime.UtcNow;
                 field.UpdatedAt = DateTime.UtcNow;
 
                 switch (postField.Details)
@@ -99,6 +143,14 @@ app.MapPut("forms/{id:int}", async (AppDbContext dbContext, int id, FormCreateUp
                             {
                                 { nameof(textInputDetails.MinLength), textInputDetails.MinLength },
                                 { nameof(textInputDetails.MaxLength), textInputDetails.MaxLength },
+                            }
+                        };
+                        field.DetailsJsonColumn = new()
+                        {
+                            TextInput = new ()
+                            {
+                                MinLength = textInputDetails.MinLength,
+                                MaxLength = textInputDetails.MaxLength,
                             }
                         };
                         break;
@@ -127,6 +179,14 @@ app.MapPut("forms/{id:int}", async (AppDbContext dbContext, int id, FormCreateUp
                             {
                                 { nameof(textInputDetails.MinLength), textInputDetails.MinLength },
                                 { nameof(textInputDetails.MaxLength), textInputDetails.MaxLength },
+                            }
+                        };
+                        field.DetailsJsonColumn = new()
+                        {
+                            TextInput = new()
+                            {
+                                MinLength = textInputDetails.MinLength,
+                                MaxLength = textInputDetails.MaxLength,
                             }
                         };
                         break;
