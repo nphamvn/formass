@@ -6,6 +6,7 @@ namespace FormaaS.Models
     {
         [Required]
         public string Name { get; set; }
+        
         public ICollection<FormFieldCreateUpdateRequest> Fields { get; set; } = [];
     }
 }

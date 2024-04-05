@@ -5,24 +5,24 @@
 namespace FormaaS.Migrations
 {
     /// <inheritdoc />
-    public partial class AddDetailsJsonColumn : Migration
+    public partial class AddIsRequired : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "DetailsJsonColumn",
+            migrationBuilder.AddColumn<bool>(
+                name: "IsRequired",
                 table: "FormFields",
-                type: "jsonb",
+                type: "boolean",
                 nullable: false,
-                defaultValue: "");
+                defaultValue: false);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "DetailsJsonColumn",
+                name: "IsRequired",
                 table: "FormFields");
         }
     }

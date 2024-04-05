@@ -1,8 +1,9 @@
+using System.Text.Json;
 using FormaaS;
 using FormaaS.Entities;
 using FormaaS.Models;
 using Microsoft.EntityFrameworkCore;
-using System.Xml.Linq;
+using Newtonsoft.Json.Schema;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,208 +33,196 @@ app.UseHttpsRedirection();
 
 app.MapPost("forms", async (AppDbContext dbContext, FormCreateUpdateRequest formCreateUpdateRequest) =>
 {
-    using (var trans = await dbContext.Database.BeginTransactionAsync())
+    await using var trans = await dbContext.Database.BeginTransactionAsync();
+
+    try
     {
-        try
+        var form = new Form
         {
-            //Insert form
-            var form = new Form
+            Name = formCreateUpdateRequest.Name,
+            CreatedAt = DateTime.UtcNow
+        };
+            
+        await dbContext.Forms.AddAsync(form);
+        await dbContext.SaveChangesAsync();
+        
+        var insertedFields = new List<FormField>();
+        foreach (var field in formCreateUpdateRequest.Fields)
+        {
+            insertedFields.Add(new FormField()
             {
-                Name = formCreateUpdateRequest.Name,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await dbContext.Forms.AddAsync(form);
-            await dbContext.SaveChangesAsync();
-
-            //Insert form fields
-            var formFiels = formCreateUpdateRequest.Fields.Select(f => new FormField
-            {
-                Id = f.Id,
-                //Name = f.Name,
-                //Type = f.Type,
+                Name = field.Name,
+                Type = field.Type,
+                FormId = form.Id,
+                Details = new FormFieldDetails()
+                {
+                    TextInput = MapTextInputDetails(field.Details.TextInput),
+                    NumberInput = MapNumberInputDetails(field.Details.NumberInput)
+                }
             });
-
-            await dbContext.FormFields.AddRangeAsync();
-
-            await trans.CommitAsync();
         }
-        catch (Exception)
-        {
-            await trans.RollbackAsync();
-            throw;
-        }
+        
+        await dbContext.FormFields.AddRangeAsync(insertedFields);
+        await dbContext.SaveChangesAsync();
+        
+        await trans.CommitAsync();
     }
-
+    catch (Exception e)
+    {
+        await trans.RollbackAsync();
+        Console.WriteLine(e);
+        throw;
+    }
+    
     return Results.Created();
 });
 
-//app.MapPost("formfields", async (AppDbContext dbContext) =>
-//{
-//    await dbContext.FormFields.AddAsync(new FormField
-//    {
-//        Id = Guid.NewGuid(),
-//        FormId = 1,
-//        Name = "Mock Field",
-//        Type = "TextInput",
-//        Details = new()
-//        {
-//            VirtualDictionary = new Dictionary<string, object>()
-//            {
-//                { "MinLength", 1 },
-//                { "MaxLength", 100 },
-//            }
-//        },
-//        DetailsJsonColumn = new()
-//        {
-//            MinLength = 1,
-//            MaxLength = 100,
-//        },
-//        CreatedAt = DateTime.UtcNow
-//    });
-
-//    await dbContext.SaveChangesAsync();
-//});
-
-//app.MapGet("formfields", async (AppDbContext dbContext) =>
-//{
-//    var allFieldIds = new List<Guid> { Guid.Parse("39bea9b4-0fb7-4e7d-8582-7dcc59cb3fdd") };
-//    var fields = await dbContext.FormFields.Where(ff => allFieldIds.Contains(ff.Id)).ToListAsync();
-
-//    return Results.Ok(fields);
-//});
-
-//app.MapGet("formfields/{id:guid}", async (AppDbContext dbContext, Guid id) =>
-//{
-//    var field = await dbContext.FormFields.SingleOrDefaultAsync(ff => ff.Id == id);
-
-//    return Results.Ok(field);
-//});
-
-app.MapPut("forms/{id:int}", async (AppDbContext dbContext, int id, FormCreateUpdateRequest formCreateUpdateRequest) =>
+app.MapPost("forms/{id:int}", async (AppDbContext dbContext, int id, FormCreateUpdateRequest formCreateUpdateRequest) =>
 {
-    using (var trans = await dbContext.Database.BeginTransactionAsync())
+    await using var trans = await dbContext.Database.BeginTransactionAsync();
+    try
     {
-        try
+        var form = await dbContext.Forms.SingleAsync(f => f.Id == id);
+        form.Name = formCreateUpdateRequest.Name;
+        await dbContext.SaveChangesAsync();
+        
+        var currentFields = await dbContext.FormFields
+            .Where(ff => ff.FormId == form.Id)
+            .ToListAsync();
+        
+        var insertedFields = new List<FormField>();
+        foreach (var field in formCreateUpdateRequest.Fields)
         {
-            var form = await dbContext.Forms.Include(x => x.Fields).SingleAsync(x => x.Id == id);
-
-            form.Name = formCreateUpdateRequest.Name;
-            form.UpdatedAt = DateTime.UtcNow;
-
-            await dbContext.SaveChangesAsync();
-
-            var allFieldIds = formCreateUpdateRequest.Fields.Select(f => f.Id).ToList();
-            var updateFields = await dbContext.FormFields
-                            .Where(x => allFieldIds.Contains(x.Id))
-                            .ToListAsync();
-            foreach (var field in updateFields)
+            if (currentFields.Any(f => f.Id == field.Id))
             {
-                var postField = formCreateUpdateRequest.Fields.Single(f => f.Id == field.Id);
-
-                field.Name = postField.Name;
-                field.UpdatedAt = DateTime.UtcNow;
-
-                switch (postField.Details)
-                {
-                    case FormFieldTextInputDetails textInputDetails:
-                        field.Details = new()
-                        {
-                            VirtualDictionary = new Dictionary<string, object>()
-                            {
-                                { nameof(textInputDetails.MinLength), textInputDetails.MinLength },
-                                { nameof(textInputDetails.MaxLength), textInputDetails.MaxLength },
-                            }
-                        };
-                        field.DetailsJsonColumn = new()
-                        {
-                            TextInput = new ()
-                            {
-                                MinLength = textInputDetails.MinLength,
-                                MaxLength = textInputDetails.MaxLength,
-                            }
-                        };
-                        break;
-                    default:
-                        break;
-                }
+                // Update
+                var currentField = currentFields.Single(f => f.Id == field.Id);
+                currentField.Name = field.Name;
+                currentField.Type = field.Type;
+                currentField.Details.TextInput = MapTextInputDetails(field.Details.TextInput);
+                currentField.Details.NumberInput = MapNumberInputDetails(field.Details.NumberInput);
             }
-
-            var addFieldIds = allFieldIds.Except(updateFields.Select(f => f.Id));
-            var addFields = formCreateUpdateRequest.Fields.Where(x => addFieldIds.Contains(x.Id)).Select(postField =>
+            else
             {
-                var field = new FormField
+                // Insert
+                insertedFields.Add(new FormField()
                 {
-                    Id = postField.Id,
-                    Form = form,
-                    Name = postField.Name,
-                    Type = postField.Type,
-                };
-
-                switch (postField.Details)
-                {
-                    case FormFieldTextInputDetails textInputDetails:
-                        field.Details = new()
-                        {
-                            VirtualDictionary = new Dictionary<string, object>()
-                            {
-                                { nameof(textInputDetails.MinLength), textInputDetails.MinLength },
-                                { nameof(textInputDetails.MaxLength), textInputDetails.MaxLength },
-                            }
-                        };
-                        field.DetailsJsonColumn = new()
-                        {
-                            TextInput = new()
-                            {
-                                MinLength = textInputDetails.MinLength,
-                                MaxLength = textInputDetails.MaxLength,
-                            }
-                        };
-                        break;
-                    default:
-                        break;
-                }
-
-                return field;
-            });
-
-            await dbContext.FormFields.AddRangeAsync(addFields);
-
-            await dbContext.SaveChangesAsync();
-
-            await trans.CommitAsync();
+                    Name = field.Name,
+                    Type = field.Type,
+                    FormId = form.Id,
+                    Details = new FormFieldDetails()
+                    {
+                        TextInput = MapTextInputDetails(field.Details.TextInput),
+                        NumberInput = MapNumberInputDetails(field.Details.NumberInput)
+                    }
+                });
+            }
         }
-        catch (Exception)
+        
+        await dbContext.FormFields.AddRangeAsync(insertedFields);
+        await dbContext.SaveChangesAsync();
+        
+        await trans.CommitAsync();
+    }
+    catch (Exception e)
+    {
+        await trans.RollbackAsync();
+        Console.WriteLine(e);
+        throw;
+    }
+});
+
+app.MapPost("forms/{id:int}/submit", async (AppDbContext dbContext, int id, List<FormSubmitRequest> formSubmitRequest) =>
+{
+    var form = await dbContext.Forms.SingleAsync(f => f.Id == id);
+    
+    var fields = await dbContext.FormFields
+        .Where(ff => ff.FormId == id)
+        .ToListAsync();
+    
+    var insertValues = new List<FormFieldValue>();
+    var requiredFields = fields.Where(f => f.IsRequired).ToList();
+    
+    if (requiredFields.Any(f => !formSubmitRequest.Any(fs => fs.FieldId == f.Id)))
+    {
+        return Results.BadRequest();
+    }
+    
+    foreach (var field in fields)
+    {
+        if (formSubmitRequest.Any(f => f.FieldId == field.Id))
         {
-            await trans.RollbackAsync();
-            throw;
+            var value = formSubmitRequest.Single(f => f.FieldId == field.Id).Value;
+
+            if (!TryParse(field, (JsonElement)value, out var parsedValue))
+            {
+                return Results.BadRequest();
+            }
+            insertValues.Add(parsedValue);
         }
     }
+    
+    await dbContext.FormFieldValues.AddRangeAsync(insertValues);
+    await dbContext.SaveChangesAsync();
 
-    return Results.NoContent();
-});
-
-app.MapGet("forms", async (AppDbContext dbContext) =>
-{
-    var forms = await dbContext.Forms.Include(x => x.Fields).AsNoTracking().ToListAsync();
-    return Results.Ok(forms.Select(f => new
-    {
-        f.Id,
-        f.Name,
-        Fields = f.Fields.Select(f => new
-        {
-            f.Id,
-            f.Name,
-            f.Type,
-            Details = f.Details.VirtualDictionary
-        })
-    }));
-});
-
-app.MapGet("forms/{id:int}", async (AppDbContext dbContext, int id) =>
-{
-    var form = await dbContext.Forms.Include(x => x.Fields).SingleAsync(x => x.Id == id);
-    return Results.Ok(form);
+    return Results.Ok();
 });
 
 app.Run();
+return;
+
+bool TryParse(FormField formField, JsonElement o, out FormFieldValue parsedValue)
+{
+    parsedValue = new FormFieldValue
+    {
+        Field = formField
+    };
+    switch (formField.Type)
+    {
+        case "TextInput":
+            if (o.ValueKind != JsonValueKind.String)
+            {
+                return false;
+            }
+            parsedValue.StringValue = o.GetString();
+            break;
+        case "NumberInput":
+            if (o.ValueKind != JsonValueKind.Number)
+            {
+                return false;
+            }
+
+            parsedValue.StringValue = o.GetInt32().ToString();
+            break;
+        default:
+            return false;
+    }
+    return true;
+}
+
+TextInputDetails? MapTextInputDetails(FormFieldTextInputDetails? detailsTextInput)
+{
+    if (detailsTextInput is null)
+    {
+        return null;
+    }
+
+    return new()
+    {
+        MinLength = detailsTextInput.MinLength,
+        MaxLength = detailsTextInput.MaxLength
+    };
+}
+NumberInputDetails? MapNumberInputDetails(FormFieldNumberInputDetails? numberInputDetails)
+{
+    if (numberInputDetails is null)
+    {
+        return null;
+    }
+
+    return new()
+    {
+        Min = numberInputDetails.Min,
+        Max = numberInputDetails.Max
+    };
+}

@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FormaaS.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20240311063409_UpdateData2")]
-    partial class UpdateData2
+    [Migration("20240405085031_AddFormFieldValue")]
+    partial class AddFormFieldValue
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -78,6 +78,28 @@ namespace FormaaS.Migrations
                     b.ToTable("FormFields");
                 });
 
+            modelBuilder.Entity("FormaaS.Entities.FormFieldValue", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("FieldId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("StringValue")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FieldId");
+
+                    b.ToTable("FormFieldValues");
+                });
+
             modelBuilder.Entity("FormaaS.Entities.FormField", b =>
                 {
                     b.HasOne("FormaaS.Entities.Form", "Form")
@@ -86,49 +108,78 @@ namespace FormaaS.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.OwnsOne("FormaaS.Entities.FormFieldDetails", "DetailsJsonColumn", b1 =>
+                    b.OwnsOne("FormaaS.Entities.FormFieldDetails", "Details", b1 =>
                         {
                             b1.Property<Guid>("FormFieldId")
                                 .HasColumnType("uuid");
-
-                            b1.Property<int>("MaxLength")
-                                .HasColumnType("integer");
-
-                            b1.Property<int>("MinLength")
-                                .HasColumnType("integer");
 
                             b1.HasKey("FormFieldId");
 
                             b1.ToTable("FormFields");
 
-                            b1.ToJson("DetailsJsonColumn");
+                            b1.ToJson("Details");
 
                             b1.WithOwner()
                                 .HasForeignKey("FormFieldId");
-                        });
 
-                    b.OwnsOne("JsonProperty.EFCore.JsonDictionary", "Details", b1 =>
-                        {
-                            b1.Property<Guid>("FormFieldId")
-                                .HasColumnType("uuid");
+                            b1.OwnsOne("FormaaS.Entities.NumberInputDetails", "NumberInput", b2 =>
+                                {
+                                    b2.Property<Guid>("FormFieldDetailsFormFieldId")
+                                        .HasColumnType("uuid");
 
-                            b1.Property<string>("JsonString")
-                                .HasColumnType("text");
+                                    b2.Property<int?>("Max")
+                                        .HasColumnType("integer");
 
-                            b1.HasKey("FormFieldId");
+                                    b2.Property<int?>("Min")
+                                        .HasColumnType("integer");
 
-                            b1.ToTable("FormFields");
+                                    b2.HasKey("FormFieldDetailsFormFieldId");
 
-                            b1.WithOwner()
-                                .HasForeignKey("FormFieldId");
+                                    b2.ToTable("FormFields");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("FormFieldDetailsFormFieldId");
+                                });
+
+                            b1.OwnsOne("FormaaS.Entities.TextInputDetails", "TextInput", b2 =>
+                                {
+                                    b2.Property<Guid>("FormFieldDetailsFormFieldId")
+                                        .HasColumnType("uuid");
+
+                                    b2.Property<int?>("MaxLength")
+                                        .HasColumnType("integer");
+
+                                    b2.Property<int?>("MinLength")
+                                        .HasColumnType("integer");
+
+                                    b2.HasKey("FormFieldDetailsFormFieldId");
+
+                                    b2.ToTable("FormFields");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("FormFieldDetailsFormFieldId");
+                                });
+
+                            b1.Navigation("NumberInput");
+
+                            b1.Navigation("TextInput");
                         });
 
                     b.Navigation("Details")
                         .IsRequired();
 
-                    b.Navigation("DetailsJsonColumn");
-
                     b.Navigation("Form");
+                });
+
+            modelBuilder.Entity("FormaaS.Entities.FormFieldValue", b =>
+                {
+                    b.HasOne("FormaaS.Entities.FormField", "Field")
+                        .WithMany()
+                        .HasForeignKey("FieldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Field");
                 });
 
             modelBuilder.Entity("FormaaS.Entities.Form", b =>
